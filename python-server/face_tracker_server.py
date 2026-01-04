@@ -86,12 +86,17 @@ def on_message(client, userdata, msg):
     """Callback when a message is received on subscribed topic."""
     try:
         image_data = msg.payload
-        logger.debug(f"Received image: {len(image_data)} bytes")
+        logger.info(f"Received image: {len(image_data)} bytes")
+
+        # save the image to a file
+        with open("received_image.jpg", "wb") as f:
+            f.write(image_data)
+        logger.info("Saved image to received_image.jpg")
         
         position = extract_position(image_data)
         
         if position is None:
-            logger.debug("Position extraction returned None, skipping")
+            logger.info("Position extraction returned None, skipping")
             return
         
         position = max(MIN_POSITION, min(MAX_POSITION, position))

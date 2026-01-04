@@ -25,20 +25,23 @@
 // Servo pin
 #define SERVO_PIN         14
 
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "Sepi";
+const char* password = "12345678";
 
-const char* mqtt_server = "YOUR_MQTT_BROKER_IP";  // e.g., "192.168.1.100"
+const char* mqtt_server = "10.186.33.140";  // e.g., "192.168.1.100"
 const int mqtt_port = 1883;
 const char* mqtt_client_id = "esp32_cam_client";
 const char* image_topic = "camera/image";
 const char* position_topic = "servo/position";
 
-const unsigned long PICTURE_INTERVAL_MS = 5000;
+const unsigned long PICTURE_INTERVAL_MS = 500;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 Servo servo;
+
+// MQTT buffer size - needs to be large enough for JPEG images (default is 256 bytes)
+#define MQTT_BUFFER_SIZE 51200  // 50KB buffer for images
 
 camera_fb_t* fb = NULL;
 
@@ -143,12 +146,42 @@ void sendPicture() {
     return;
   }
   
-  if (client.publish(image_topic, (const uint8_t*)fb->buf, fb->len)) {
+  // Check MQTT connection before publishing
+  if (!client.connected()) {
+    Serial.println("MQTT not connected, cannot publish image");
+    esp_camera_fb_return(fb);
+    return;
+  }
+  
+  Serial.print("Attempting to publish image (");
+  Serial.print(fb->len);
+  Serial.print(" bytes), MQTT state: ");
+  Serial.println(client.state());
+  
+  // Check if image size exceeds buffer
+  if (fb->len > MQTT_BUFFER_SIZE) {
+    Serial.print("ERROR: Image size (");
+    Serial.print(fb->len);
+    Serial.print(") exceeds MQTT buffer size (");
+    Serial.print(MQTT_BUFFER_SIZE);
+    Serial.println(")");
+    esp_camera_fb_return(fb);
+    return;
+  }
+  
+  bool publishResult = client.publish(image_topic, (const uint8_t*)fb->buf, fb->len);
+  
+  if (publishResult) {
     Serial.print("Published image (");
     Serial.print(fb->len);
     Serial.println(" bytes)");
   } else {
-    Serial.println("Failed to publish image");
+    Serial.print("Failed to publish image. MQTT state: ");
+    Serial.print(client.state());
+    Serial.print(", Image size: ");
+    Serial.print(fb->len);
+    Serial.print(" bytes, Buffer size: ");
+    Serial.println(MQTT_BUFFER_SIZE);
   }
   
   esp_camera_fb_return(fb);
@@ -175,6 +208,7 @@ void setup() {
   
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
+  client.setBufferSize(MQTT_BUFFER_SIZE);  // Set buffer size for large messages
   
   Serial.println("Setup complete!");
 }
