@@ -61,7 +61,9 @@ def extract_position(image_data: bytes) -> Optional[int]:
         
         image_width = img.shape[1]
         
-        position = int(np.interp(face_center_x, [0, image_width], [0, 180]))
+        position = int(np.interp(face_center_x, [0, image_width], [22, 180-22]))
+
+        position = 180 - position
         
         logger.debug(f"Face center x: {face_center_x:.1f}, Image width: {image_width}, Position: {position}")
         
